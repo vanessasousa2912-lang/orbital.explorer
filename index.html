@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explorador Orbital!</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #020205;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+
+        .stat {
+            margin-bottom: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.3);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        #menu-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .menu-content {
+            text-align: center;
+            background: rgba(20, 20, 40, 0.9);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            box-shadow: 0 0 30px rgba(0, 210, 255, 0.2);
+        }
+
+        .logo-img {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 20px;
+            border-radius: 25px;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.4);
+            border: 2px solid rgba(0, 210, 255, 0.2);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #00d2ff;
+            font-size: 32px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        button {
+            background: #00d2ff;
+            color: #020205;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        button:hover {
+            background: #ffffff;
+            transform: scale(1.05);
+        }
+
+        .lang-selector {
+            margin-bottom: 20px;
+        }
+
+        .lang-btn {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding: 8px 15px;
+            font-size: 14px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .lang-btn.active {
+            background: #00d2ff;
+            color: #020205;
+        }
+
+        #fuel-bar-container {
+            width: 150px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        #fuel-bar {
+            width: 100%;
+            height: 100%;
+            background: #00d2ff;
+            box-shadow: 0 0 10px #00d2ff;
+            transition: width 0.1s;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+            z-index: 10;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="menu-overlay">
+        <div class="menu-content">
+            <!-- Adicionado o logo enviado pelo Luis -->
+            <img src="logo foguete.jpg" alt="Logo Explorador Orbital" class="logo-img" onerror="this.style.display='none'">
+            
+            <h1 id="menu-title">Explorador Orbital</h1>
+            <div class="lang-selector">
+                <button class="lang-btn active" onclick="setLanguage('pt')">PT</button>
+                <button class="lang-btn" onclick="setLanguage('en')">EN</button>
+                <button class="lang-btn" onclick="setLanguage('es')">ES</button>
+            </div>
+            <button id="start-btn" onclick="startGame()">Começar Exploração</button>
+        </div>
+    </div>
+
+    <div id="ui" class="hidden">
+        <div class="stat"><span id="label-speed">Velocidade</span>: <span id="speed-val">0</span> u/s</div>
+        <div class="stat">
+            <span id="label-fuel">Combustível</span>
+            <div id="fuel-bar-container">
+                <div id="fuel-bar"></div>
+            </div>
+        </div>
+        <div class="stat"><span id="label-discoveries">Descobertas</span>: <span id="planets-val">0</span></div>
+    </div>
+
+    <div id="instructions" class="hidden">
+        <span id="instr-text"><b>WASD/Setas</b>: Mover | <b>Espaço</b>: Freio | <b>Shift</b>: Boost</span>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const fuelBar = document.getElementById('fuel-bar');
+        const speedVal = document.getElementById('speed-val');
+        const planetsVal = document.getElementById('planets-val');
+        
+        const translations = {
+            pt: {
+                title: "Explorador Orbital",
+                start: "Começar Exploração",
+                speed: "Velocidade",
+                fuel: "Combustível",
+                discoveries: "Descobertas",
+                instr: "<b>WASD/Setas</b>: Mover | <b>Espaço</b>: Freio | <b>Shift</b>: Boost"
+            },
+            en: {
+                title: "Orbital Explorer",
+                start: "Start Exploration",
+                speed: "Speed",
+                fuel: "Fuel",
+                discoveries: "Discoveries",
+                instr: "<b>WASD/Arrows</b>: Move | <b>Space</b>: Brake | <b>Shift</b>: Boost"
+            },
+            es: {
+                title: "Explorador Orbital",
+                start: "Iniciar Exploración",
+                speed: "Velocidad",
+                fuel: "Combustible",
+                discoveries: "Descubrimientos",
+                instr: "<b>WASD/Flechas</b>: Mover | <b>Espacio</b>: Freno | <b>Shift</b>: Boost"
+            }
+        };
+
+        let currentLang = 'pt';
+        let gameRunning = false;
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.innerText.toLowerCase() === lang);
+            });
+            document.getElementById('menu-title').innerText = translations[lang].title;
+            document.getElementById('start-btn').innerText = translations[lang].start;
+            document.getElementById('label-speed').innerText = translations[lang].speed;
+            document.getElementById('label-fuel').innerText = translations[lang].fuel;
+            document.getElementById('label-discoveries').innerText = translations[lang].discoveries;
+            document.getElementById('instr-text').innerHTML = translations[lang].instr;
+        }
+
+        function startGame() {
+            document.getElementById('menu-overlay').classList.add('hidden');
+            document.getElementById('ui').classList.remove('hidden');
+            document.getElementById('instructions').classList.remove('hidden');
+            gameRunning = true;
+        }
+
+        let width, height;
+        let keys = {};
+        let discoveredCount = 0;
+
+        const player = {
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            angle: -Math.PI / 2,
+            rotationSpeed: 0.1,
+            thrust: 0.28,
+            fuel: 100,
+            maxFuel: 100,
+            radius: 8,
+            trail: []
+        };
+
+        const camera = { x: 0, y: 0 };
+        let planets = [];
+        let stars = [];
+        const GRID_SIZE = 3500;
+        let visitedSectors = new Set();
+
+        const PLANET_TYPES = [
+            { name: 'Rochoso', baseColor: {h: 20, s: 30, l: 40}, hasAtmosphere: false, texture: 'dots' },
+            { name: 'Gasoso', baseColor: {h: 200, s: 70, l: 50}, hasAtmosphere: true, texture: 'stripes' },
+            { name: 'Vulcânico', baseColor: {h: 0, s: 80, l: 40}, hasAtmosphere: true, texture: 'cracks' },
+            { name: 'Gelado', baseColor: {h: 190, s: 40, l: 80}, hasAtmosphere: false, texture: 'noise' },
+            { name: 'Oceânico', baseColor: {h: 220, s: 90, l: 30}, hasAtmosphere: true, texture: 'swirl' }
+        ];
+
+        function init() {
+            resize();
+            for(let i=0; i<400; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 2,
+                    opacity: Math.random(),
+                    z: Math.random() * 0.6 + 0.1 
+                });
+            }
+            generateSector(0, 0);
+            window.addEventListener('keydown', e => keys[e.code] = true);
+            window.addEventListener('keyup', e => keys[e.code] = false);
+            window.addEventListener('resize', resize);
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        function generateSector(sectorX, sectorY) {
+            const sectorKey = `${sectorX},${sectorY}`;
+            if (visitedSectors.has(sectorKey)) return;
+            visitedSectors.add(sectorKey);
+
+            const count = 1 + Math.floor(Math.random() * 3); 
+            for (let i = 0; i < count; i++) {
+                const px = sectorX * GRID_SIZE + Math.random() * GRID_SIZE;
+                const py = sectorY * GRID_SIZE + Math.random() * GRID_SIZE;
+                
+                if (Math.abs(px) < 600 && Math.abs(py) < 600) continue;
+
+                const type = PLANET_TYPES[Math.floor(Math.random() * PLANET_TYPES.length)];
+                const radius = 60 + Math.random() * 140;
+                
+                const h = (type.baseColor.h + (Math.random() * 40 - 20) + 360) % 360;
+                const s = Math.min(100, Math.max(0, type.baseColor.s + (Math.random() * 40 - 20)));
+                const l = Math.min(100, Math.max(0, type.baseColor.l + (Math.random() * 20 - 10)));
+                const color = `hsl(${h}, ${s}%, ${l}%)`;
+
+                const planet = {
+                    x: px, y: py,
+                    radius: radius,
+                    gravityRadius: radius * 7,
+                    gravityStrength: 0.18 + (radius / 150) * 0.4,
+                    color: color,
+                    h: h, s: s, l: l,
+                    type: type,
+                    hasRings: Math.random() > 0.7,
+                    ringColor: `hsla(${h}, ${s}%, ${l}%, 0.4)`,
+                    discovered: false,
+                    moons: []
+                };
+
+                const moonCount = 1 + Math.floor(Math.random() * 3);
+                for(let m=0; m < moonCount; m++) {
+                    const moonRadius = 12 + Math.random() * 15;
+                    planet.moons.push({
+                        orbitRadius: radius + 150 + Math.random() * 250,
+                        angle: Math.random() * Math.PI * 2,
+                        speed: (0.003 + Math.random() * 0.01) * (Math.random() > 0.5 ? 1 : -1),
+                        radius: moonRadius,
+                        color: `hsl(${h}, 5%, ${Math.max(10, l - 30)}%)`,
+                        gravityStrength: planet.gravityStrength * 0.5,
+                        gravityRadius: moonRadius * 6
+                    });
+                }
+                planets.push(planet);
+            }
+        }
+
+        function checkCollision(obj, target) {
+            const dx = target.x - obj.x;
+            const dy = target.y - obj.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if (dist < target.radius + obj.radius) {
+                const nx = dx / dist;
+                const ny = dy / dist;
+                const overlap = (target.radius + obj.radius) - dist;
+                
+                obj.x -= nx * overlap;
+                obj.y -= ny * overlap;
+                
+                const dot = obj.vx * nx + obj.vy * ny;
+                obj.vx = (obj.vx - 2 * dot * nx) * 0.4;
+                obj.vy = (obj.vy - 2 * dot * ny) * 0.4;
+                
+                obj.fuel = Math.min(obj.maxFuel, obj.fuel + 0.6);
+                return true;
+            }
+            return false;
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            const isAccelerating = keys['ArrowUp'] || keys['KeyW'];
+            const isBoosting = keys['ShiftLeft'] || keys['ShiftRight'];
+            let currentThrust = player.thrust;
+
+            if (isAccelerating && isBoosting) {
+                currentThrust *= 1.8;
+            }
+
+            if (keys['ArrowLeft'] || keys['KeyA']) player.angle -= player.rotationSpeed;
+            if (keys['ArrowRight'] || keys['KeyD']) player.angle += player.rotationSpeed;
+
+            if (isAccelerating && player.fuel > 0) {
+                player.vx += Math.cos(player.angle) * currentThrust;
+                player.vy += Math.sin(player.angle) * currentThrust;
+                
+                const consumption = isBoosting ? 0.23 : 0.08;
+                player.fuel -= consumption;
+                
+                if (Math.random() > 0.3) {
+                    player.trail.push({
+                        x: player.x - Math.cos(player.angle) * 10,
+                        y: player.y - Math.sin(player.angle) * 10,
+                        life: 1.0,
+                        color: isBoosting ? '#ff8c00' : '#00d2ff'
+                    });
+                }
+            } else if (player.fuel < player.maxFuel) {
+                player.fuel += 0.06; 
+            }
+
+            if (keys['Space']) {
+                player.vx *= 0.93;
+                player.vy *= 0.93;
+            }
+
+            planets.forEach(p => {
+                p.moons.forEach(m => {
+                    m.angle += m.speed;
+                    m.x = p.x + Math.cos(m.angle) * m.orbitRadius;
+                    m.y = p.y + Math.sin(m.angle) * m.orbitRadius;
+
+                    const mdx = m.x - player.x;
+                    const mdy = m.y - player.y;
+                    const mdist = Math.sqrt(mdx*mdx + mdy*mdy);
+
+                    if (mdist < m.gravityRadius) {
+                        const mforce = m.gravityStrength / (mdist / 50 + 1);
+                        player.vx += (mdx / mdist) * mforce;
+                        player.vy += (mdy / mdist) * mforce;
+                    }
+                    checkCollision(player, m);
+                });
+
+                const dx = p.x - player.x;
+                const dy = p.y - player.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (dist < p.gravityRadius) {
+                    if (!p.discovered && dist < p.radius + 150) {
+                        p.discovered = true;
+                        discoveredCount++;
+                        planetsVal.innerText = discoveredCount;
+                    }
+
+                    const force = p.gravityStrength / (dist / 100 + 1);
+                    player.vx += (dx / dist) * force;
+                    player.vy += (dy / dist) * force;
+                    checkCollision(player, p);
+                }
+            });
+
+            player.x += player.vx;
+            player.y += player.vy;
+            player.vx *= 0.997;
+            player.vy *= 0.997;
+
+            camera.x += (player.x - camera.x) * 0.1;
+            camera.y += (player.y - camera.y) * 0.1;
+
+            player.trail.forEach((t, i) => {
+                t.life -= 0.03;
+                if (t.life <= 0) player.trail.splice(i, 1);
+            });
+
+            const csX = Math.floor(player.x / GRID_SIZE);
+            const csY = Math.floor(player.y / GRID_SIZE);
+            for(let x=-1; x<=1; x++) for(let y=-1; y<=1; y++) generateSector(csX+x, csY+y);
+
+            fuelBar.style.width = `${Math.max(0, (player.fuel / player.maxFuel) * 100)}%`;
+            speedVal.innerText = Math.sqrt(player.vx**2 + player.vy**2).toFixed(1);
+        }
+
+        function drawRocket(ctx, px, py, angle) {
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(angle);
+
+            const isAccelerating = keys['ArrowUp'] || keys['KeyW'];
+            const isBoosting = keys['ShiftLeft'] || keys['ShiftRight'];
+
+            if (isAccelerating && player.fuel > 0) {
+                const flameSize = isBoosting ? 25 : 15;
+                ctx.fillStyle = isBoosting ? "#ff4e00" : "#00d2ff";
+                
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = ctx.fillStyle;
+                
+                ctx.beginPath();
+                ctx.moveTo(-8, 0);
+                ctx.lineTo(-8 - flameSize - Math.random() * 10, 0);
+                ctx.strokeStyle = ctx.fillStyle;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.fillStyle = "#ecf0f1";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 12, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "#e74c3c";
+            ctx.beginPath();
+            ctx.moveTo(8, -5.5);
+            ctx.quadraticCurveTo(16, 0, 8, 5.5);
+            ctx.fill();
+
+            ctx.fillStyle = "#c0392b";
+            ctx.beginPath();
+            ctx.moveTo(-4, -5); ctx.lineTo(-11, -11); ctx.lineTo(-6, -4);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-4, 5); ctx.lineTo(-11, 11); ctx.lineTo(-6, 4);
+            ctx.fill();
+
+            ctx.fillStyle = "#3498db";
+            ctx.beginPath();
+            ctx.arc(4, 0, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            stars.forEach(s => {
+                const sx = (s.x - camera.x * s.z) % width;
+                const sy = (s.y - camera.y * s.z) % height;
+                const fx = sx < 0 ? sx + width : sx;
+                const fy = sy < 0 ? sy + height : sy;
+                ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity})`;
+                ctx.fillRect(fx, fy, s.size, s.size);
+            });
+
+            ctx.save();
+            ctx.translate(width/2 - camera.x, height/2 - camera.y);
+
+            planets.forEach(p => {
+                if (p.type.hasAtmosphere) {
+                    const glow = ctx.createRadialGradient(p.x, p.y, p.radius, p.x, p.y, p.radius + 40);
+                    glow.addColorStop(0, `hsla(${p.h}, ${p.s}%, ${p.l}%, 0.3)`);
+                    glow.addColorStop(1, 'transparent');
+                    ctx.fillStyle = glow;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius + 40, 0, Math.PI*2); ctx.fill();
+                }
+
+                if (p.hasRings) {
+                    ctx.strokeStyle = p.ringColor;
+                    ctx.lineWidth = 15;
+                    ctx.beginPath();
+                    ctx.ellipse(p.x, p.y, p.radius * 2.3, p.radius * 0.7, Math.PI / 6, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill();
+                
+                ctx.save();
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.clip();
+                ctx.fillStyle = "rgba(0,0,0,0.1)";
+                for(let i=0; i<3; i++) {
+                    ctx.fillRect(p.x - p.radius, p.y - p.radius + (i*p.radius*0.7), p.radius*2, p.radius*0.2);
+                }
+                ctx.restore();
+
+                const shadow = ctx.createRadialGradient(p.x - p.radius*0.3, p.y - p.radius*0.3, p.radius*0.5, p.x, p.y, p.radius);
+                shadow.addColorStop(0, 'transparent');
+                shadow.addColorStop(1, 'rgba(0,0,0,0.5)');
+                ctx.fillStyle = shadow;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill();
+
+                p.moons.forEach(m => {
+                    ctx.beginPath();
+                    ctx.arc(m.x, m.y, m.gravityRadius, 0, Math.PI*2);
+                    ctx.strokeStyle = "rgba(255,255,255,0.03)";
+                    ctx.stroke();
+
+                    ctx.fillStyle = m.color;
+                    ctx.beginPath(); ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2); ctx.fill();
+                    
+                    ctx.fillStyle = "rgba(0,0,0,0.2)";
+                    ctx.beginPath(); ctx.arc(m.x + m.radius*0.3, m.y - m.radius*0.3, m.radius*0.4, 0, Math.PI*2); ctx.fill();
+                });
+            });
+
+            player.trail.forEach(t => {
+                ctx.fillStyle = t.color + Math.floor(t.life * 255).toString(16).padStart(2, '0');
+                ctx.beginPath(); ctx.arc(t.x, t.y, 5 * t.life, 0, Math.PI*2); ctx.fill();
+            });
+
+            drawRocket(ctx, player.x, player.y, player.angle);
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        init();
+    </script>
+</body>
+</html>
